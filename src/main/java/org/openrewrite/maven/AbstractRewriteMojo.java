@@ -9,6 +9,8 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.openrewrite.*;
 import org.openrewrite.config.Environment;
+import org.openrewrite.config.OptionDescriptor;
+import org.openrewrite.config.RecipeDescriptor;
 import org.openrewrite.config.YamlResourceLoader;
 import org.openrewrite.internal.lang.Nullable;
 import org.openrewrite.java.JavaParser;
@@ -70,6 +72,8 @@ public abstract class AbstractRewriteMojo extends AbstractMojo {
      * The prefix used to left-pad log messages, multiplied per "level" of log message.
      */
     private static final String LOG_INDENT_INCREMENT = "    ";
+
+    private static final String RECIPE_NOT_FOUND_EXCEPTION_MSG = "Could not find recipe '%s' among available recipes";
 
     protected Environment environment() throws MojoExecutionException {
         Environment.Builder env = Environment
@@ -348,6 +352,10 @@ public abstract class AbstractRewriteMojo extends AbstractMojo {
         }
     }
 
+    protected static StringBuilder indentln(int indent, CharSequence content) {
+        return indent(indent, content).append("\n");
+    }
+
     protected static StringBuilder indent(int indent, CharSequence content) {
         StringBuilder prefix = repeat(indent, LOG_INDENT_INCREMENT);
         return prefix.append(content);
@@ -359,5 +367,34 @@ public abstract class AbstractRewriteMojo extends AbstractMojo {
             buffer.append(str);
         }
         return buffer;
+    }
+
+    /**
+     * For example, remove todo
+     *
+     * @param rd          recipeDescriptor to print
+     * @param indentLevel level of indentation buffer to use
+     * @return String representation of the RecipeDescriptor
+     */
+    public static StringBuilder printRecipe(int indentLevel, RecipeDescriptor rd) {
+        StringBuilder printer = new StringBuilder("\n");
+        printer.append(indentln(indentLevel, "name: " + rd.getName()));
+        printer.append(indentln(indentLevel, "displayName: " + rd.getDisplayName()));
+        printer.append(indentln(indentLevel, "description: " + rd.getDescription()));
+        printer.append(indentln(indentLevel, "options: " + (rd.getOptions().isEmpty() ? "[]" : "")));
+        for (OptionDescriptor od : rd.getOptions()) {
+            printer.append(indentln(indentLevel + 1, od.getName() + ": " + od.getType() + (od.isRequired() ? "!" : "")));
+            printer.append(indentln(indentLevel + 2, "displayName: " + od.getDisplayName()));
+            printer.append(indentln(indentLevel + 2, "description: " + od.getDescription()));
+            printer.append(indentln(indentLevel + 2, (od.getExample() == null ? "" : "example: " + od.getExample())));
+        }
+        return printer;
+    }
+
+    public static RecipeDescriptor getRecipeDescriptor(String recipe, Collection<RecipeDescriptor> recipeDescriptors) throws MojoExecutionException {
+        return recipeDescriptors.stream()
+                .filter(r -> r.getName().equalsIgnoreCase(recipe))
+                .findAny()
+                .orElseThrow(() -> new MojoExecutionException(String.format(RECIPE_NOT_FOUND_EXCEPTION_MSG, recipe)));
     }
 }
